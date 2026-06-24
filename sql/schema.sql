@@ -1,24 +1,38 @@
-CREATE DATABASE IF NOT EXISTS student_records
-CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS books_api
+  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE books_api;
 
-USE student_records;
+-- BOOKS
+DROP TABLE IF EXISTS books;
+CREATE TABLE books (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    title       VARCHAR(200) NOT NULL,
+    author      VARCHAR(150) NOT NULL,
+    year        SMALLINT     NOT NULL,
+    genre       VARCHAR(80)  NOT NULL DEFAULT 'Uncategorised',
+    created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP
+                              ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
 
-DROP TABLE IF EXISTS students;
+INSERT INTO books (title, author, year, genre) VALUES
+  ('Clean Code',          'Robert C. Martin',  2008, 'Software Engineering'),
+  ('Eloquent JavaScript', 'Marijn Haverbeke',   2018, 'Programming'),
+  ('Vue.js 3 By Example', 'John Au-Yeung',      2021, 'Web Development');
 
-CREATE TABLE students (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    matricNo VARCHAR(20) NOT NULL UNIQUE,
-    name VARCHAR(100) NOT NULL,
-    course VARCHAR(100) NOT NULL,
-    faculty VARCHAR(50) NOT NULL,
-    gpa DECIMAL(3,2) NOT NULL CHECK (gpa >= 0 AND gpa <= 4),
-    email VARCHAR(100) NOT NULL UNIQUE,
-    year TINYINT NOT NULL CHECK (year BETWEEN 1 AND 6),
-    active TINYINT NOT NULL DEFAULT 1
-);
+-- USERS
+DROP TABLE IF EXISTS users;
+CREATE TABLE users (
+    id            INT AUTO_INCREMENT PRIMARY KEY,
+    name          VARCHAR(150) NOT NULL,
+    email         VARCHAR(190) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    role          ENUM('member','admin') NOT NULL DEFAULT 'member',
+    created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP
+                                ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
 
-INSERT INTO students (matricNo, name, course, faculty, gpa, email, year, active) VALUES
-    ('A21CS0001', 'Ahmad Zulkarnain bin Hassan', 'Bachelor of Computer Science (Software Engineering)', 'FSKSM', 3.75, 'ahmad.zulkarnain@graduate.utm.my', 3, 1),
-    ('A21CS0002', 'Nur Aisyah binti Abdullah', 'Bachelor of Computer Science (Data Engineering)', 'FSKSM', 3.92, 'nur.aisyah@graduate.utm.my', 3, 1),
-    ('A21CS0003', 'Muhammad Faris bin Razak', 'Bachelor of Computer Science (Cybersecurity)', 'FSKSM', 3.45, 'm.faris@graduate.utm.my', 2, 1),
-    ('A21IT0004', 'Siti Khadijah binti Ibrahim', 'Bachelor of Information Technology', 'FSKSM', 3.68, 'siti.khadijah@graduate.utm.my', 4, 1);
+INSERT INTO users (name, email, password_hash, role) VALUES
+  ('Demo Admin',  'admin@books.test',  '$2y$10$IOdsnr4QxDRbaM23oUu5euzfFNXGyADfazm2JCo1YgfpFkYuFeHPG', 'admin'),
+  ('Demo Member', 'member@books.test', '$2y$10$IOdsnr4QxDRbaM23oUu5euzfFNXGyADfazm2JCo1YgfpFkYuFeHPG', 'member');
