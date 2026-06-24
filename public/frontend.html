@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UniDeal Books API - Frontend Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1, h2 { color: #b61e1e; }
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 8px;
+            margin: 8px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background: #8B1A1A;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #6b1414; }
+        pre {
+            background: #f4f4f4;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        .token-box {
+            background: #e8f4e8;
+            padding: 10px;
+            border-radius: 4px;
+            word-break: break-all;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .success { color: green; }
+        .error { color: red; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th { background: #8B1A1A; color: white; }
+    </style>
+</head>
+<body>
+    <h1>📚 UniDeal Books API - Frontend Demo</h1>
+
+    <!-- Token Status -->
+    <div class="card">
+        <h2>🔐 Authentication Status</h2>
+        <div id="tokenStatus" class="token-box">No token. Please login or register.</div>
+        <button onclick="clearToken()">Clear Token</button>
+    </div>
+
+    <div class="container">
+        <!-- LEFT COLUMN: Auth & Books List -->
+        <div>
+            <!-- Register Section -->
+            <div class="card">
+                <h2>📝 Register</h2>
+                <input type="text" id="regName" placeholder="Full Name">
+                <input type="email" id="regEmail" placeholder="Email (e.g., student@graduate.utm.my)">
+                <input type="text" id="regMatric" placeholder="Matric Number">
+                <input type="password" id="regPassword" placeholder="Password (min 6 chars)">
+                <button onclick="register()">Register</button>
+                <div id="regResult"></div>
+            </div>
+
+            <!-- Login Section -->
+            <div class="card">
+                <h2>🔑 Login</h2>
+                <input type="email" id="loginEmail" placeholder="Email">
+                <input type="password" id="loginPassword" placeholder="Password">
+                <button onclick="login()">Login</button>
+                <div id="loginResult"></div>
+            </div>
+
+            <!-- Get My Info (Protected) -->
+            <div class="card">
+                <h2>👤 My Profile (Protected)</h2>
+                <button onclick="getMyProfile()">Get My Info</button>
+                <pre id="profileResult">Click button to see your profile</pre>
+            </div>
+        </div>
+
+        <!-- RIGHT COLUMN: Books Operations -->
+        <div>
+            <!-- List All Books (Public) -->
+            <div class="card">
+                <h2>📖 All Books</h2>
+                <button onclick="listBooks()">Refresh Books</button>
+                <div id="booksList">Click Refresh to load books</div>
+            </div>
+
+            <!-- Create Book (Protected) -->
+            <div class="card">
+                <h2>➕ Create Book (Requires Login)</h2>
+                <input type="text" id="bookTitle" placeholder="Title">
+                <input type="text" id="bookAuthor" placeholder="Author">
+                <input type="number" id="bookYear" placeholder="Year">
+                <input type="text" id="bookGenre" placeholder="Genre">
+                <button onclick="createBook()">Create Book</button>
+                <div id="createResult"></div>
+            </div>
+
+            <!-- Update/Delete Book -->
+            <div class="card">
+                <h2>✏️ Update / Delete Book</h2>
+                <input type="number" id="bookId" placeholder="Book ID">
+                <input type="text" id="updateTitle" placeholder="New Title (optional)">
+                <input type="text" id="updateAuthor" placeholder="New Author (optional)">
+                <input type="number" id="updateYear" placeholder="New Year (optional)">
+                <input type="text" id="updateGenre" placeholder="New Genre (optional)">
+                <button onclick="updateBook()">Update Book</button>
+                <button onclick="deleteBook()">Delete Book</button>
+                <div id="updateResult"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        let authToken = localStorage.getItem('jwt_token') || '';
+
+        // Display token status
+        function updateTokenDisplay() {
+            const statusDiv = document.getElementById('tokenStatus');
+            if (authToken) {
+                statusDiv.innerHTML = `✅ Token present: ${authToken.substring(0, 50)}...`;
+                statusDiv.style.background = '#e8f4e8';
+            } else {
+                statusDiv.innerHTML = '❌ No token. Please login or register.';
+                statusDiv.style.background = '#f4e8e8';
+            }
+        }
+
+        // Save token
+        function setToken(token) {
+            authToken = token;
+            localStorage.setItem('jwt_token', token);
+            updateTokenDisplay();
+        }
+
+        function clearToken() {
+            authToken = '';
+            localStorage.removeItem('jwt_token');
+            updateTokenDisplay();
+            document.getElementById('loginResult').innerHTML = '<span class="success">Token cleared</span>';
+        }
+
+        // Helper for API calls
+        async function apiCall(url, method, body = null, requiresAuth = false) {
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            if (requiresAuth && authToken) {
+                headers['Authorization'] = `Bearer ${authToken}`;
+            }
+            const options = {
+                method: method,
+                headers: headers
+            };
+            if (body) {
+                options.body = JSON.stringify(body);
+            }
+            const response = await fetch(API_BASE + url, options);
+            const data = await response.json();
+            return { response, data };
+        }
+
+        // REGISTER
+        async function register() {
+            const name = document.getElementById('regName').value;
+            const email = document.getElementById('regEmail').value;
+            const matric = document.getElementById('regMatric').value;
+            const password = document.getElementById('regPassword').value;
+            const resultDiv = document.getElementById('regResult');
+            
+            try {
+                const { response, data } = await apiCall('/auth/register', 'POST', {
+                    name, email, matric, password
+                });
+                if (response.ok) {
+                    resultDiv.innerHTML = `<span class="success">✅ Registered! You can now login.</span>`;
+                } else {
+                    resultDiv.innerHTML = `<span class="error">❌ Error: ${JSON.stringify(data)}</span>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">❌ Error: ${error.message}</span>`;
+            }
+        }
+
+        // LOGIN
+        async function login() {
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            const resultDiv = document.getElementById('loginResult');
+            
+            try {
+                const { response, data } = await apiCall('/auth/login', 'POST', { email, password });
+                if (response.ok && data.token) {
+                    setToken(data.token);
+                    resultDiv.innerHTML = `<span class="success">✅ Login successful! Token saved.</span>`;
+                    listBooks(); // Refresh books after login
+                } else {
+                    resultDiv.innerHTML = `<span class="error">❌ Login failed: ${data.error || JSON.stringify(data)}</span>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">❌ Error: ${error.message}</span>`;
+            }
+        }
+
+        // GET MY PROFILE (Protected)
+        async function getMyProfile() {
+            const resultDiv = document.getElementById('profileResult');
+            if (!authToken) {
+                resultDiv.innerHTML = '<span class="error">Please login first</span>';
+                return;
+            }
+            try {
+                const { response, data } = await apiCall('/auth/me', 'GET', null, true);
+                if (response.ok) {
+                    resultDiv.innerHTML = JSON.stringify(data, null, 2);
+                } else {
+                    resultDiv.innerHTML = `<span class="error">Error: ${data.error || 'Unauthorized'}</span>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">Error: ${error.message}</span>`;
+            }
+        }
+
+        // LIST BOOKS (Public)
+        async function listBooks() {
+            const resultDiv = document.getElementById('booksList');
+            try {
+                const { response, data } = await apiCall('/api/books', 'GET');
+                if (response.ok && data.data) {
+                    let html = '<table><tr><th>ID</th><th>Title</th><th>Author</th><th>Year</th><th>Genre</th></tr>';
+                    data.data.forEach(book => {
+                        html += `<tr>
+                            <td>${book.id}</td>
+                            <td>${escapeHtml(book.title)}</td>
+                            <td>${escapeHtml(book.author)}</td>
+                            <td>${book.year}</td>
+                            <td>${escapeHtml(book.genre)}</td>
+                        </tr>`;
+                    });
+                    html += '</table>';
+                    resultDiv.innerHTML = html;
+                } else {
+                    resultDiv.innerHTML = `<span class="error">No books found</span>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">Error: ${error.message}</span>`;
+            }
+        }
+
+        // CREATE BOOK (Protected)
+        async function createBook() {
+            const title = document.getElementById('bookTitle').value;
+            const author = document.getElementById('bookAuthor').value;
+            const year = parseInt(document.getElementById('bookYear').value);
+            const genre = document.getElementById('bookGenre').value;
+            const resultDiv = document.getElementById('createResult');
+            
+            if (!title || !author || !year) {
+                resultDiv.innerHTML = '<span class="error">Title, Author, and Year are required</span>';
+                return;
+            }
+            if (!authToken) {
+                resultDiv.innerHTML = '<span class="error">Please login first</span>';
+                return;
+            }
+            
+            try {
+                const { response, data } = await apiCall('/api/books', 'POST', { title, author, year, genre }, true);
+                if (response.ok) {
+                    resultDiv.innerHTML = `<span class="success">✅ Book created: ${data.message || 'Success'}</span>`;
+                    listBooks(); // Refresh the list
+                    // Clear form
+                    document.getElementById('bookTitle').value = '';
+                    document.getElementById('bookAuthor').value = '';
+                    document.getElementById('bookYear').value = '';
+                    document.getElementById('bookGenre').value = '';
+                } else {
+                    resultDiv.innerHTML = `<span class="error">❌ Error: ${JSON.stringify(data)}</span>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">❌ Error: ${error.message}</span>`;
+            }
+        }
+
+        // UPDATE BOOK (Protected)
+        async function updateBook() {
+            const id = document.getElementById('bookId').value;
+            const title = document.getElementById('updateTitle').value;
+            const author = document.getElementById('updateAuthor').value;
+            const year = document.getElementById('updateYear').value;
+            const genre = document.getElementById('updateGenre').value;
+            const resultDiv = document.getElementById('updateResult');
+            
+            if (!id) {
+                resultDiv.innerHTML = '<span class="error">Book ID is required</span>';
+                return;
+            }
+            if (!authToken) {
+                resultDiv.innerHTML = '<span class="error">Please login first</span>';
+                return;
+            }
+            
+            const updateData = {};
+            if (title) updateData.title = title;
+            if (author) updateData.author = author;
+            if (year) updateData.year = parseInt(year);
+            if (genre) updateData.genre = genre;
+            
+            if (Object.keys(updateData).length === 0) {
+                resultDiv.innerHTML = '<span class="error">At least one field to update</span>';
+                return;
+            }
+            
+            try {
+                const { response, data } = await apiCall(`/api/books/${id}`, 'PUT', updateData, true);
+                if (response.ok) {
+                    resultDiv.innerHTML = `<span class="success">✅ Book ${id} updated</span>`;
+                    listBooks();
+                    // Clear fields
+                    document.getElementById('updateTitle').value = '';
+                    document.getElementById('updateAuthor').value = '';
+                    document.getElementById('updateYear').value = '';
+                    document.getElementById('updateGenre').value = '';
+                    document.getElementById('bookId').value = '';
+                } else {
+                    resultDiv.innerHTML = `<span class="error">❌ Error: ${JSON.stringify(data)}</span>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">❌ Error: ${error.message}</span>`;
+            }
+        }
+
+        // DELETE BOOK (Protected - Admin only)
+        async function deleteBook() {
+            const id = document.getElementById('bookId').value;
+            const resultDiv = document.getElementById('updateResult');
+            
+            if (!id) {
+                resultDiv.innerHTML = '<span class="error">Book ID is required</span>';
+                return;
+            }
+            if (!authToken) {
+                resultDiv.innerHTML = '<span class="error">Please login first</span>';
+                return;
+            }
+            
+            if (!confirm(`Delete book ${id}? This action cannot be undone.`)) return;
+            
+            try {
+                const { response, data } = await apiCall(`/api/books/${id}`, 'DELETE', null, true);
+                if (response.ok) {
+                    resultDiv.innerHTML = `<span class="success">✅ Book ${id} deleted</span>`;
+                    listBooks();
+                    document.getElementById('bookId').value = '';
+                } else {
+                    resultDiv.innerHTML = `<span class="error">❌ Error: ${JSON.stringify(data)}</span>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">❌ Error: ${error.message}</span>`;
+            }
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            });
+        }
+
+        // Initialize
+        updateTokenDisplay();
+        listBooks();
+    </script>
+</body>
+</html>
